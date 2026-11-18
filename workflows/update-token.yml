@@ -8,28 +8,27 @@ on:
 
 jobs:
   update:
-  runs-on: ubuntu-latest
-  permissions:
-    contents: write
-  steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.10'
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
 
-    - name: Run script in loop for 5 minutes (every 10 seconds)
-      run: |
-        git config --global user.name "github-actions[bot]"
-        git config --global user.email "github-actions[bot]@users.noreply.github.com"
-        
-        # Loop selama 290 detik (mendekati 5 menit) dengan jeda 10 detik
-        for i in {1..29}; do
-          python generate_token.py
-          git add token.json
-          git commit -m "Auto-update tokens [skip ci]" || echo "No changes to commit"
-          git push || echo "Push failed, retrying next loop"
-          sleep 10
-        done
+      - name: Run script in loop for 5 minutes (every 10 seconds)
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          
+          for i in {1..29}; do
+            python generate_token.py
+            git add token.json
+            git commit -m "Auto-update tokens [skip ci]" || echo "No changes to commit"
+            git push || echo "Push failed, retrying next loop"
+            sleep 10
+          done
