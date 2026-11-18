@@ -57,16 +57,16 @@
     <div class="card">
         <div class="meta">Token Utama (Ganti tiap 10 menit)</div>
         <div class="token-code" id="t-utama">------</div>
-        <div class="meta">Sisa waktu: <strong id="sisa-utama">0</strong> detik | Sebelumnya: <span id="prev-utama">-</span></div>
+        <div class="meta">Sisa waktu: <strong id="sisa-utama">0</strong> detik</div>
     </div>
 
     <div class="card kunci">
-        <div class="meta">Token Kunci (Ganti tiap 10 detik)</div>
+        <div class="meta">Token Kunci (Ganti tiap 15 detik)</div>
         <div class="token-code" id="t-kunci">------</div>
-        <div class="meta">Sisa waktu: <strong id="sisa-kunci">0</strong> detik | Sebelumnya: <span id="prev-kunci">-</span></div>
+        <div class="meta">Sisa waktu: <strong id="sisa-kunci">0</strong> detik</div>
     </div>
 
-    <div class="meta" style="margin-bottom: 5px;">Output JSON (Sama seperti struktur PHP):</div>
+    <div class="meta" style="margin-bottom: 5px;">Output JSON:</div>
     <pre id="json-output">Memuat...</pre>
 </div>
 
@@ -76,7 +76,7 @@
 
     // Konfigurasi durasi masing-masing token dalam satuan detik
     const INTERVAL_UTAMA = 600; // 10 menit
-    const INTERVAL_KUNCI = 10;  // 10 detik
+    const INTERVAL_KUNCI = 15;  // 15 detik
 
     // Cek apakah halaman dipanggil dalam mode JSON oleh aplikasi Android
     const urlParams = new URLSearchParams(window.location.search);
@@ -106,10 +106,10 @@
         return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
     }
 
-    // Fungsi deterministik penghasil 6 karakter huruf kapital (tanpa I dan O)
+    // Fungsi deterministik penghasil 6 digit angka
     async function generateDeterministicToken(seed, secret) {
         const hash = await hmacSha256Hex(String(seed), secret);
-        const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+        const chars = '0123456789';
         let token = '';
         
         for (let i = 0; i < 6; i++) {
@@ -131,29 +131,23 @@
         const sisaDetikUtama = INTERVAL_UTAMA - (now % INTERVAL_UTAMA);
         const sisaDetikKunci = INTERVAL_KUNCI - (now % INTERVAL_KUNCI);
 
-        // Generate semua token secara paralel
-        const [kodeUtama, prevUtama, kodeKunci, prevKunci] = await Promise.all([
+        // Generate token utama dan token kunci secara paralel
+        const [kodeUtama, kodeKunci] = await Promise.all([
             generateDeterministicToken("UTAMA_" + slotUtama, SECRET_KEY),
-            generateDeterministicToken("UTAMA_" + (slotUtama - 1), SECRET_KEY),
-            generateDeterministicToken("KUNCI_" + slotKunci, SECRET_KEY),
-            generateDeterministicToken("KUNCI_" + (slotKunci - 1), SECRET_KEY)
+            generateDeterministicToken("KUNCI_" + slotKunci, SECRET_KEY)
         ]);
 
-        // Struktur objek JSON yang identik dengan output PHP
-    const responseObj = {
+        // Struktur objek JSON yang disederhanakan
+        const responseObj = {
             status: "success",
             server_time_utc: new Date(now * 1000).toISOString().replace('.000Z', 'Z'),
             token_utama: {
                 kode: kodeUtama,
-                berlaku_detik: INTERVAL_UTAMA,
-                sisa_waktu_detik: sisaDetikUtama,
-                prev_kode: prevUtama
+                sisa_waktu_detik: sisaDetikUtama
             },
             token_kunci: {
                 kode: kodeKunci,
-                berlaku_detik: INTERVAL_KUNCI,
-                sisa_waktu_detik: sisaDetikKunci,
-                prev_kode: prevKunci
+                sisa_waktu_detik: sisaDetikKunci
             }
         };
 
@@ -166,11 +160,9 @@
             // Tampilan normal untuk web pengawas
             document.getElementById('t-utama').textContent = kodeUtama;
             document.getElementById('sisa-utama').textContent = sisaDetikUtama;
-            document.getElementById('prev-utama').textContent = prevUtama;
 
             document.getElementById('t-kunci').textContent = kodeKunci;
             document.getElementById('sisa-kunci').textContent = sisaDetikKunci;
-            document.getElementById('prev-kunci').textContent = prevKunci;
 
             document.getElementById('json-output').textContent = jsonString;
         }
