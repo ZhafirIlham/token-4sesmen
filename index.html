@@ -51,7 +51,7 @@
 </head>
 <body>
 
-<div class="container">
+<div class="container" id="web-view">
     <h2>Token Asesmen</h2>
 
     <div class="card">
@@ -77,6 +77,15 @@
     // Konfigurasi durasi masing-masing token dalam satuan detik
     const INTERVAL_UTAMA = 600; // 10 menit
     const INTERVAL_KUNCI = 10;  // 10 detik
+
+    // Cek apakah halaman dipanggil dalam mode JSON oleh aplikasi Android
+    const urlParams = new URLSearchParams(window.location.search);
+    const isJsonMode = urlParams.get('format') === 'json';
+
+    if (isJsonMode) {
+        // Ubah styling dokumen agar langsung merender teks JSON polos
+        document.head.innerHTML = '<meta charset="UTF-8"><style>body { background: #1e1e1e; color: #d4d4d4; font-family: monospace; padding: 20px; word-wrap: break-word; white-space: pre-wrap; }</style>';
+    }
 
     // Fungsi HMAC-SHA256 menggunakan Web Crypto API (ekivalen hash_hmac di PHP)
     async function hmacSha256Hex(message, secret) {
@@ -131,7 +140,7 @@
         ]);
 
         // Struktur objek JSON yang identik dengan output PHP
-        const responseObj = {
+    const responseObj = {
             status: "success",
             server_time_utc: new Date(now * 1000).toISOString().replace('.000Z', 'Z'),
             token_utama: {
@@ -148,17 +157,23 @@
             }
         };
 
-        // Tampilkan ke UI HTML
-        document.getElementById('t-utama').textContent = kodeUtama;
-        document.getElementById('sisa-utama').textContent = sisaDetikUtama;
-        document.getElementById('prev-utama').textContent = prevUtama;
+        const jsonString = JSON.stringify(responseObj, null, 4);
 
-        document.getElementById('t-kunci').textContent = kodeKunci;
-        document.getElementById('sisa-kunci').textContent = sisaDetikKunci;
-        document.getElementById('prev-kunci').textContent = prevKunci;
+        if (isJsonMode) {
+            // Jika diakses dari Android dengan ?format=json, tampilkan murni JSON
+            document.body.textContent = jsonString;
+        } else {
+            // Tampilan normal untuk web pengawas
+            document.getElementById('t-utama').textContent = kodeUtama;
+            document.getElementById('sisa-utama').textContent = sisaDetikUtama;
+            document.getElementById('prev-utama').textContent = prevUtama;
 
-        // Tampilkan format JSON mentah
-        document.getElementById('json-output').textContent = JSON.stringify(responseObj, null, 4);
+            document.getElementById('t-kunci').textContent = kodeKunci;
+            document.getElementById('sisa-kunci').textContent = sisaDetikKunci;
+            document.getElementById('prev-kunci').textContent = prevKunci;
+
+            document.getElementById('json-output').textContent = jsonString;
+        }
     }
 
     // Jalankan pertama kali saat halaman dibuka, lalu ulangi setiap 1 detik
