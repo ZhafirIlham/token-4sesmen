@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generator Token Asesmen</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f6f9;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+        .container {
+            background: white;
+            padding: 25px 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            max-width: 500px;
+            width: 100%;
+        }
+        h2 { margin-top: 0; color: #333; text-align: center; }
+        .card {
+            background: #f8f9fa;
+            border-left: 5px solid #007bff;
+            padding: 15px;
+            margin-bottom: 15px;
+            border-radius: 6px;
+        }
+        .card.kunci { border-left-color: #28a745; }
+        .token-code {
+            font-size: 2rem;
+            font-weight: bold;
+            letter-spacing: 4px;
+            color: #222;
+            margin: 5px 0;
+        }
+        .meta { font-size: 0.9rem; color: #666; }
+        pre {
+            background: #272822;
+            color: #f8f8f2;
+            padding: 12px;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Token Asesmen</h2>
+
+    <div class="card">
+        <div class="meta">Token Utama (Ganti tiap 10 menit)</div>
+        <div class="token-code" id="t-utama">------</div>
+        <div class="meta">Sisa waktu: <strong id="sisa-utama">0</strong> detik | Sebelumnya: <span id="prev-utama">-</span></div>
+    </div>
+
+    <div class="card kunci">
+        <div class="meta">Token Kunci (Ganti tiap 10 detik)</div>
+        <div class="token-code" id="t-kunci">------</div>
+        <div class="meta">Sisa waktu: <strong id="sisa-kunci">0</strong> detik | Sebelumnya: <span id="prev-kunci">-</span></div>
+    </div>
+
+    <div class="meta" style="margin-bottom: 5px;">Output JSON (Sama seperti struktur PHP):</div>
+    <pre id="json-output">Memuat...</pre>
+</div>
+
+<script>
+    // KUNCI RAHASIA (Pastikan sama dengan yang ada di validasi_token.php)
+    const SECRET_KEY = "SMKN4BDG_4SESMEN_2026_SECRET";
+
+    // Konfigurasi durasi masing-masing token dalam satuan detik
+    const INTERVAL_UTAMA = 600; // 10 menit
+    const INTERVAL_KUNCI = 10;  // 10 detik
+
+    // Fungsi HMAC-SHA256 menggunakan Web Crypto API (ekivalen hash_hmac di PHP)
+    async function hmacSha256Hex(message, secret) {
+        const encoder = new TextEncoder();
+        const keyData = encoder.encode(secret);
+        const msgData = encoder.encode(message);
+
+        const cryptoKey = await crypto.subtle.importKey(
+            "raw",
+            keyData,
+            { name: "HMAC", hash: "SHA-256" },
+            false,
+            ["sign"]
+        );
+
+        const signature = await crypto.subtle.sign("HMAC", cryptoKey, msgData);
+        const hashArray = Array.from(new Uint8Array(signature));
+        return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+
+    // Fungsi deterministik penghasil 6 karakter huruf kapital (tanpa I dan O)
+    async function generateDeterministicToken(seed, secret) {
+        const hash = await hmacSha256Hex(String(seed), secret);
+        const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+        let token = '';
+        
+        for (let i = 0; i < 6; i++) {
+            const hexPair = hash.substr(i * 2, 2);
+            const val = parseInt(hexPair, 16);
+            token += chars[val % chars.length];
+        }
+        return token;
+    }
+
+    // Fungsi utama untuk memperbarui data setiap detik
+    async function updateTokens() {
+        const nowMs = Date.now();
+        const now = Math.floor(nowMs / 1000);
+
+        const slotUtama = Math.floor(now / INTERVAL_UTAMA);
+        const slotKunci = Math.floor(now / INTERVAL_KUNCI);
+
+        const sisaDetikUtama = INTERVAL_UTAMA - (now % INTERVAL_UTAMA);
+        const sisaDetikKunci = INTERVAL_KUNCI - (now % INTERVAL_KUNCI);
+
+        // Generate semua token secara paralel
+        const [kodeUtama, prevUtama, kodeKunci, prevKunci] = await Promise.all([
+            generateDeterministicToken("UTAMA_" + slotUtama, SECRET_KEY),
+            generateDeterministicToken("UTAMA_" + (slotUtama - 1), SECRET_KEY),
+            generateDeterministicToken("KUNCI_" + slotKunci, SECRET_KEY),
+            generateDeterministicToken("KUNCI_" + (slotKunci - 1), SECRET_KEY)
+        ]);
+
+        // Struktur objek JSON yang identik dengan output PHP
+        const responseObj = {
+            status: "success",
+            server_time_utc: new Date(now * 1000).toISOString().replace('.000Z', 'Z'),
+            token_utama: {
+                kode: kodeUtama,
+                berlaku_detik: INTERVAL_UTAMA,
+                sisa_waktu_detik: sisaDetikUtama,
+                prev_kode: prevUtama
+            },
+            token_kunci: {
+                kode: kodeKunci,
+                berlaku_detik: INTERVAL_KUNCI,
+                sisa_waktu_detik: sisaDetikKunci,
+                prev_kode: prevKunci
+            }
+        };
+
+        // Tampilkan ke UI HTML
+        document.getElementById('t-utama').textContent = kodeUtama;
+        document.getElementById('sisa-utama').textContent = sisaDetikUtama;
+        document.getElementById('prev-utama').textContent = prevUtama;
+
+        document.getElementById('t-kunci').textContent = kodeKunci;
+        document.getElementById('sisa-kunci').textContent = sisaDetikKunci;
+        document.getElementById('prev-kunci').textContent = prevKunci;
+
+        // Tampilkan format JSON mentah
+        document.getElementById('json-output').textContent = JSON.stringify(responseObj, null, 4);
+    }
+
+    // Jalankan pertama kali saat halaman dibuka, lalu ulangi setiap 1 detik
+    updateTokens();
+    setInterval(updateTokens, 1000);
+</script>
+
+</body>
+</html>
